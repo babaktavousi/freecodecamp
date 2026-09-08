@@ -1,0 +1,13 @@
+node_modules/
+__pycache__/
+*.pyc
+
+# Footage and reconstructions fetched or built locally. The committed sample is
+# walkthrough_360.webm / walkthrough_cloud.ply; everything else stays out.
+samples/real_*
+samples/*.attribution.txt
+samples/*.insv
+!samples/walkthrough_360.webm
+!samples/walkthrough_360.json
+!samples/walkthrough_cloud.ply
+!samples/walkthrough_cloud.json

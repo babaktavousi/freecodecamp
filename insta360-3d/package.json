@@ -1,0 +1,12 @@
+{
+  "name": "insta360-point-cloud-studio",
+  "version": "1.0.0",
+  "description": "Turn Insta360 360 video into a navigable, measurable 3D point cloud in the browser",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node tools/serve.js",
+    "test": "node --test web/tests/"
+  },
+  "license": "BSD-3-Clause"
+}

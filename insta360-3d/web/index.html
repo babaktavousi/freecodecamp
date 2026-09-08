@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Insta360 &rarr; Point Cloud Studio</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#127760;</text></svg>">
+<link rel="stylesheet" href="styles/app.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js",
+    "three/addons/loaders/PLYLoader.js": "./vendor/three/PLYLoader.js"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="toolbar">
+  <div class="brand">
+    <span class="brand-mark">360</span>
+    <span class="brand-text">Point Cloud Studio</span>
+  </div>
+
+  <div class="tool-group" role="group" aria-label="File">
+    <button id="btn-open-video" class="tool" title="Open a 360 video (equirectangular MP4/WebM)">
+      <span class="ico">&#9654;</span> Video
+    </button>
+    <button id="btn-open-cloud" class="tool" title="Open an existing point cloud (.ply)">
+      <span class="ico">&#9673;</span> Cloud
+    </button>
+    <button id="btn-save-cloud" class="tool" title="Export the current point cloud as binary PLY" disabled>
+      <span class="ico">&#8615;</span> Export
+    </button>
+  </div>
+
+  <div class="tool-group" role="group" aria-label="Navigation mode">
+    <button class="tool nav-mode is-active" data-mode="orbit" title="Orbit (O) — drag to spin around the pivot">Orbit</button>
+    <button class="tool nav-mode" data-mode="pan" title="Pan (P) — drag to slide the view">Pan</button>
+    <button class="tool nav-mode" data-mode="zoom" title="Zoom (Z) — drag up/down to zoom">Zoom</button>
+    <button class="tool nav-mode" data-mode="look" title="Look around (L) — pivot the camera in place">Look</button>
+    <button class="tool nav-mode" data-mode="walk" title="Walk (W) — WASD at a fixed eye height">Walk</button>
+    <button class="tool nav-mode" data-mode="fly" title="Fly (F) — free movement in any direction">Fly</button>
+  </div>
+
+  <div class="tool-group" role="group" aria-label="Measure">
+    <button class="tool measure-mode" data-measure="distance" title="Point to point distance (D)">
+      <span class="ico">&#8596;</span> Distance
+    </button>
+    <button class="tool measure-mode" data-measure="path" title="Multi-segment path, cumulative length (A)">
+      <span class="ico">&#8735;</span> Path
+    </button>
+    <button class="tool measure-mode" data-measure="point" title="Read out a single point's coordinates">
+      <span class="ico">&#8226;</span> Point
+    </button>
+  </div>
+
+  <div class="tool-group tool-group--right">
+    <select id="view-preset" class="select" title="Standard views">
+      <option value="">View&hellip;</option>
+      <option value="top">Top</option>
+      <option value="bottom">Bottom</option>
+      <option value="front">Front</option>
+      <option value="back">Back</option>
+      <option value="left">Left</option>
+      <option value="right">Right</option>
+      <option value="iso">Isometric</option>
+    </select>
+    <button id="btn-fit" class="tool" title="Zoom to fit everything (Home)">Fit</button>
+    <button id="btn-help" class="tool" title="Keyboard and mouse reference">?</button>
+  </div>
+</header>
+
+<main class="workspace">
+  <aside class="panel panel--left" id="panel-left">
+    <div class="panel-head">
+      <h2>Reconstruct</h2>
+      <button class="panel-collapse" data-target="panel-left" title="Collapse">&#8249;</button>
+    </div>
+    <div class="panel-body">
+      <section class="block">
+        <div class="source-box" id="source-box">
+          <div class="source-empty" id="source-empty">
+            <p><strong>Drop a 360 video here</strong></p>
+            <p class="muted">Equirectangular MP4 or WebM, 2:1 aspect.<br>
+              Insta360 X3/X4/X5 &rarr; export from Insta360 Studio.</p>
+            <button class="btn btn-primary" id="btn-pick-video">Choose file</button>
+            <button class="btn" id="btn-load-sample">Load sample walkthrough</button>
+          </div>
+          <video id="source-video" playsinline muted preload="auto" hidden></video>
+        </div>
+        <div id="source-info" class="source-info" hidden></div>
+      </section>
+
+      <section class="block">
+        <h3>Capture settings</h3>
+        <label class="field">
+          <span>Keyframe spacing</span>
+          <input type="range" id="opt-stride" min="0.1" max="1.5" step="0.05" value="0.35">
+          <output id="out-stride">0.35 s</output>
+        </label>
+        <p class="hint">Spacing sets the stereo baseline. At a normal walking pace
+          0.3&ndash;0.5&nbsp;s gives roughly half a metre between viewpoints, which
+          suits indoor scenes; open outdoor scenes want more.</p>
+        <label class="field">
+          <span>Detail (sweep width)</span>
+          <select id="opt-quality">
+            <option value="512">Fast &mdash; 512 px</option>
+            <option value="768" selected>Balanced &mdash; 768 px</option>
+            <option value="1024">Detailed &mdash; 1024 px</option>
+            <option value="1536">Maximum &mdash; 1536 px</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Depth layers</span>
+          <input type="range" id="opt-layers" min="32" max="256" step="16" value="128">
+          <output id="out-layers">128</output>
+        </label>
+        <p class="hint">Depth is searched over this many hypotheses. More layers
+          resolve distant surfaces more finely and cost time in proportion.</p>
+        <label class="field">
+          <span>Camera height above floor</span>
+          <span class="inline-input">
+            <input type="number" id="opt-camera-height" value="1.60" step="0.05" min="0.2" max="5">
+            <span class="unit">m</span>
+          </span>
+        </label>
+        <p class="hint">A single moving camera fixes shape but not size. The camera
+          height sets the scale, so measurements come out in real metres.</p>
+      </section>
+
+      <section class="block">
+        <button class="btn btn-primary btn-block" id="btn-reconstruct" disabled>Build point cloud</button>
+        <button class="btn btn-block" id="btn-cancel" hidden>Cancel</button>
+        <div class="progress" id="progress" hidden>
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <div class="progress-label" id="progress-label">Starting&hellip;</div>
+        </div>
+        <pre class="log" id="log" hidden></pre>
+      </section>
+
+      <section class="block">
+        <h3>Display</h3>
+        <label class="field">
+          <span>Point size</span>
+          <input type="range" id="opt-point-size" min="1" max="12" step="0.5" value="3">
+          <output id="out-point-size">3.0</output>
+        </label>
+        <label class="field">
+          <span>Colour</span>
+          <select id="opt-color-mode">
+            <option value="rgb" selected>Camera colour</option>
+            <option value="height">Height</option>
+            <option value="confidence">Match confidence</option>
+          </select>
+        </label>
+        <label class="field field--row">
+          <input type="checkbox" id="opt-show-path" checked>
+          <span>Show camera path</span>
+        </label>
+        <label class="field field--row">
+          <input type="checkbox" id="opt-show-grid" checked>
+          <span>Show ground grid</span>
+        </label>
+        <label class="field field--row">
+          <input type="checkbox" id="opt-clip">
+          <span>Section plane</span>
+        </label>
+        <label class="field" id="clip-field" hidden>
+          <span>Section height</span>
+          <input type="range" id="opt-clip-height" min="0" max="100" step="0.5" value="100">
+          <output id="out-clip-height">&mdash;</output>
+        </label>
+      </section>
+    </div>
+  </aside>
+
+  <div class="viewport" id="viewport">
+    <canvas id="canvas"></canvas>
+    <div class="viewport-overlay">
+      <div class="mode-hint" id="mode-hint">Orbit &mdash; drag to rotate, middle-drag to pan, wheel to zoom</div>
+      <div class="cursor-readout" id="cursor-readout" hidden></div>
+    </div>
+    <div class="empty-state" id="empty-state">
+      <h1>Turn a 360 walkthrough into a measurable point cloud</h1>
+      <p>Load an Insta360 equirectangular clip and reconstruct it, or open a point cloud you
+        built earlier. Then navigate it like any CAD model and measure real distances.</p>
+      <div class="empty-actions">
+        <button class="btn btn-primary" id="btn-empty-sample">Load the sample walkthrough</button>
+        <button class="btn" id="btn-empty-cloud">Open a .ply file</button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="panel panel--right" id="panel-right">
+    <div class="panel-head">
+      <h2>Measurements</h2>
+      <button class="panel-collapse" data-target="panel-right" title="Collapse">&#8250;</button>
+    </div>
+    <div class="panel-body">
+      <section class="block">
+        <label class="field">
+          <span>Units</span>
+          <select id="opt-units">
+            <option value="m" selected>Metres</option>
+            <option value="cm">Centimetres</option>
+            <option value="mm">Millimetres</option>
+            <option value="ft">Feet &amp; inches</option>
+          </select>
+        </label>
+        <p class="hint" id="measure-hint">Pick <strong>Distance</strong> in the toolbar, then click two
+          points in the model. Snapping locks onto the nearest reconstructed point.</p>
+      </section>
+
+      <section class="block">
+        <div id="measure-list" class="measure-list"></div>
+        <div class="row-actions">
+          <button class="btn btn-small" id="btn-clear-measures">Clear all</button>
+          <button class="btn btn-small" id="btn-export-measures">Export CSV</button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h3>Calibrate scale</h3>
+        <p class="hint">Know a real dimension in the scene? Measure it, select it below and enter
+          the true length &mdash; the whole cloud is rescaled to match.</p>
+        <label class="field">
+          <span>Reference measurement</span>
+          <select id="calib-target"><option value="">None</option></select>
+        </label>
+        <label class="field">
+          <span>True length</span>
+          <span class="inline-input">
+            <input type="number" id="calib-length" step="0.01" min="0.001" placeholder="2.03">
+            <span class="unit" id="calib-unit">m</span>
+          </span>
+        </label>
+        <button class="btn btn-block" id="btn-calibrate" disabled>Apply scale</button>
+      </section>
+
+      <section class="block" id="stats-block">
+        <h3>Model</h3>
+        <dl class="stats" id="stats"></dl>
+      </section>
+    </div>
+  </aside>
+</main>
+
+<footer class="statusbar">
+  <span id="status-mode">Orbit</span>
+  <span id="status-points">No model loaded</span>
+  <span id="status-extent"></span>
+  <span class="spacer"></span>
+  <span id="status-fps"></span>
+</footer>
+
+<dialog id="help-dialog" class="dialog">
+  <h2>Navigation &amp; shortcuts</h2>
+  <div class="help-grid">
+    <div>
+      <h3>Mouse</h3>
+      <table>
+        <tr><td>Left drag</td><td>Act with the current tool</td></tr>
+        <tr><td>Middle drag</td><td>Pan (any mode)</td></tr>
+        <tr><td>Right drag</td><td>Orbit (any mode)</td></tr>
+        <tr><td>Wheel</td><td>Zoom towards the cursor</td></tr>
+        <tr><td>Double click</td><td>Set the pivot / focus on a point</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Keyboard</h3>
+      <table>
+        <tr><td>O / P / Z</td><td>Orbit, Pan, Zoom</td></tr>
+        <tr><td>L / W / F</td><td>Look, Walk, Fly</td></tr>
+        <tr><td>D / A</td><td>Distance, Path measurement</td></tr>
+        <tr><td>W A S D</td><td>Move (Walk &amp; Fly)</td></tr>
+        <tr><td>Q / E</td><td>Down / up (Fly)</td></tr>
+        <tr><td>Shift</td><td>Move faster</td></tr>
+        <tr><td>Home</td><td>Zoom to fit</td></tr>
+        <tr><td>Esc</td><td>Cancel the current measurement</td></tr>
+        <tr><td>Delete</td><td>Remove the selected measurement</td></tr>
+      </table>
+    </div>
+  </div>
+  <form method="dialog"><button class="btn btn-primary">Close</button></form>
+</dialog>
+
+<input type="file" id="file-video" accept="video/*,.insv" hidden>
+<input type="file" id="file-cloud" accept=".ply" hidden>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
