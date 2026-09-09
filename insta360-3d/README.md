@@ -86,10 +86,17 @@ centimetres, millimetres and feet & inches.
 
 **Scale.** A single moving camera recovers shape exactly but size only up to one
 global factor — this is inherent to monocular capture, not a shortcut taken
-here. The app resolves it by finding the floor plane and applying the camera
-height you entered. If you know a real dimension in the scene (a door is
-usually 2.03 m), measure it, pick it under **Calibrate scale**, type the true
-length, and the whole cloud is rescaled to match.
+here. The app resolves it by finding the floor beneath the walked path and
+applying the camera height you entered.
+
+That automatic step is the weakest link in the chain, and it is worth knowing
+why: a strongly repetitive floor (tiling, decking, paving) offers the stereo
+matcher several equally good answers one tile apart, which biases the floor
+towards the camera and the model towards being too large. Higher **Detail**
+settings resolve the pattern and reduce it. When measurements matter, measure
+one thing you actually know — a door is usually 2.03 m, a step 0.17 m — pick it
+under **Calibrate scale**, type the true length, and the whole cloud is rescaled
+to match. One calibration fixes every measurement in the model.
 
 ## How it works
 

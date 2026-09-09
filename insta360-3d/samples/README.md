@@ -55,6 +55,25 @@ python3 tools/reconstruct.py --video samples/walkthrough_360.webm \
 python3 tools/evaluate.py --cloud samples/walkthrough_cloud.ply
 ```
 
+### How accurate the committed cloud is
+
+600,000 points from 38 keyframes, scored against the exact scene it was rendered
+from:
+
+| | |
+|---|---|
+| Camera path error, mean / max | 0.20 m / 0.80 m over a 15.9 m walk |
+| Point distance to the true surface, median | 0.17 m |
+| … 90th percentile | 0.56 m |
+| Points within 0.10 m of a true surface | 40% |
+| Residual scale after automatic floor scaling | 1.36× too large |
+
+The shape is recovered well; the automatic scale is what misses, for the reason
+given under **Scale** in the main README — this scene's floor is regularly
+tiled. Calibrating against one known length (the doorway is 2.03 m) removes that
+1.36× and brings measurements to within a few centimetres, which is the workflow
+to use whenever a number matters.
+
 ## Real Insta360 footage
 
 `fetch_real_sample.py` searches Wikimedia Commons for freely licensed 360 video
