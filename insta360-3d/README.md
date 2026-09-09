@@ -62,6 +62,18 @@ python3 samples/fetch_real_sample.py --index 3 --out samples/real_360.mp4
 python3 samples/fetch_real_sample.py --youtube <url>   # via yt-dlp
 ```
 
+Before reconstructing any clip — downloaded or your own — check it:
+
+```bash
+python3 tools/check_clip.py --video samples/real_360.mp4
+```
+
+That takes seconds and tells you what an hour of reconstruction would: whether
+the frame is really 2:1, whether a logo bar needs cropping off, and which
+continuous segments have the camera actually moving. Most published 360 video
+fails at least one of those — see `samples/README.md` for a survey of what a
+search of Commons really turns up.
+
 ## Navigating and measuring
 
 Navigation follows the conventions of desktop model-review tools:

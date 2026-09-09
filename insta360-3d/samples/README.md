@@ -89,6 +89,35 @@ Nothing is downloaded until you name an entry, and every candidate's licence is
 printed first. Not every 360 video is a walking capture — a clip shot from a
 tripod has no parallax and cannot be reconstructed, whatever the pipeline does.
 
+**Check a clip before reconstructing it**, which takes seconds instead of the
+best part of an hour:
+
+```bash
+python3 tools/check_clip.py --video my_walk.mp4
+```
+
+It verifies the frame is genuinely 2:1, finds any static logo bar (and gives you
+the `ffmpeg` crop that removes it), locates cuts and blurred dissolves, and
+reports the continuous segments where the camera is actually moving — then
+prints a ready-to-run command for the best one.
+
+### What a survey of freely licensed 360 video actually turns up
+
+Four Commons clips were tested while building this. None was usable, and the
+reasons are worth knowing before you go looking:
+
+| Clip | Problem |
+|---|---|
+| *360 video near Haikou East Railway Station* (CC0) | 720×480, ratio 1.50 — not equirectangular |
+| *Evergreen Park panoramic video* (CC0) | 720×480, ratio 1.50 — not equirectangular |
+| *Esino Lario 360* (CC BY-SA 4.0) | True 2:1, but camera sits on a stone table — frame-to-frame difference ≈ 0.1/255, no parallax at all |
+| *Anıtkabir 360 Panorama Gezinti* (CC BY 3.0) | True equirectangular walk once the logo bar is cropped, but an edited montage: near-stationary viewpoint shots joined by blurred dissolves. Chaining poses across a dissolve puts the camera in a different place, and the reconstruction comes out as a 100 m smear |
+
+The pattern is that published 360 video is made to be *looked at*, not walked
+through: tripods, timelapses, drone shots and montages dominate. Footage you
+shoot yourself, walking continuously, is far more likely to work than anything
+you find — which is why the pipeline is aimed at your own X-series exports.
+
 **Straight from your own camera:** an X3/X4/X5 records `.insv`, which is raw
 dual-fisheye plus metadata and cannot be used directly. Open the file in
 Insta360 Studio (free, Windows and macOS) and export **360 / equirectangular**
