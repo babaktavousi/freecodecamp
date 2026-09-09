@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start": "node tools/serve.js",
-    "test": "node --test web/tests/"
+    "test": "node --test \"web/tests/*.test.js\""
   },
   "license": "BSD-3-Clause"
 }

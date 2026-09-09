@@ -136,7 +136,12 @@ def main():
     try:
         results = search_commons(args.query, args.limit)
     except Exception as error:  # noqa: BLE001 - network failures should be readable
-        raise SystemExit(f"Commons search failed: {error}")
+        raise SystemExit(
+            f"Commons search failed: {error}\n"
+            "If that is a proxy or firewall refusal rather than an outage, download a "
+            "clip by hand instead and point the app at the file; nothing here needs "
+            "the network except this fetcher."
+        )
 
     if not results:
         raise SystemExit(f"no video files found on Commons for '{args.query}'")
