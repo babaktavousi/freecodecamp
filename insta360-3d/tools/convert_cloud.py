@@ -20,6 +20,7 @@ it is then viewable in the browser client as well.
 """
 
 import argparse
+import datetime
 import os
 import struct
 import sys
@@ -87,6 +88,10 @@ def write_las(path, xyz, rgb):
     header[25] = 2  # version minor
     header[26:58] = b"Insta360 Point Cloud Studio".ljust(32, b"\0")[:32]
     header[58:90] = b"Insta360 Point Cloud Studio".ljust(32, b"\0")[:32]
+    # Some importers reject a zero creation date as a malformed header.
+    today = datetime.date.today()
+    struct.pack_into("<H", header, 90, today.timetuple().tm_yday)
+    struct.pack_into("<H", header, 92, today.year)
     struct.pack_into("<H", header, 94, HEADER_SIZE)
     struct.pack_into("<I", header, 96, HEADER_SIZE)
     struct.pack_into("<I", header, 100, 0)  # no variable length records
