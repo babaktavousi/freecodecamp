@@ -96,6 +96,34 @@ multi-segment run and reports the cumulative length. Each measurement lists its
 ΔX/ΔY/ΔZ components, the list exports to CSV, and units switch between metres,
 centimetres, millimetres and feet & inches.
 
+## Taking the model into Navisworks or Trimble Connect
+
+**Export** offers three formats, written **Z-up in metres** so that lengths
+measured downstream match the ones measured here:
+
+| | |
+|---|---|
+| **LAS 1.2** | Point cloud interchange with colour — the one to use |
+| **PTS** | Plain text `X Y Z intensity R G B`; larger and slower, but almost universally accepted |
+| **PLY** | Binary with colour, for CloudCompare, MeshLab and Blender |
+
+**Navisworks Freedom** has no importer: it opens only NWD, DWF and ReCap
+RCS/RCP. Export LAS, open it in Autodesk ReCap and save an `.rcp` — Freedom
+opens that directly, and navigates and measures it. With Navisworks Manage you
+can skip ReCap, appending the LAS and publishing an NWD.
+
+**Trimble Connect** takes the LAS through Trimble Connect for Windows; once
+uploaded it is viewable in the browser client too.
+
+The same conversions are available for clouds you already have:
+
+```bash
+python3 tools/convert_cloud.py --in cloud.ply --out cloud.las
+```
+
+Both writers are held to the same output — the browser's LAS and the CLI's are
+byte-identical in colour and agree to within the 1 mm coordinate quantisation.
+
 **Scale.** A single moving camera recovers shape exactly but size only up to one
 global factor — this is inherent to monocular capture, not a shortcut taken
 here. The app resolves it by finding the floor beneath the walked path and

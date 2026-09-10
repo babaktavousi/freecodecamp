@@ -7,6 +7,7 @@ import { MeasureTool, convert, formatLength } from './viewer/MeasureTool.js';
 import { Reconstructor } from './pipeline/Reconstructor.js';
 import { loadVideo } from './pipeline/frames.js';
 import { downloadBlob, exportPLY } from './io/ply.js';
+import { exportLAS, exportPTS } from './io/las.js';
 
 const SAMPLE_VIDEO = '../samples/walkthrough_360.webm';
 const SAMPLE_CLOUD = '../samples/walkthrough_cloud.ply';
@@ -401,6 +402,20 @@ function loadCloudFile(file) {
   reader.readAsArrayBuffer(file);
 }
 
+/**
+ * PLYLoader converts vertex colours from sRGB into three's linear working
+ * space. The reconstruction pipeline produces sRGB directly, so without this
+ * a loaded cloud would be darker on screen than the same cloud reconstructed
+ * here, and would export darker still.
+ */
+function linearToSRGB(values) {
+  for (let i = 0; i < values.length; i++) {
+    const c = values[i];
+    values[i] = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+  }
+  return values;
+}
+
 function loadPLYBuffer(buffer, name) {
   let geometry;
   try {
@@ -416,7 +431,7 @@ function loadPLYBuffer(buffer, name) {
   }
   const colorAttr = geometry.getAttribute('color');
   const colors = colorAttr
-    ? Float32Array.from(colorAttr.array)
+    ? linearToSRGB(Float32Array.from(colorAttr.array))
     : new Float32Array(position.count * 3).fill(0.75);
 
   resetModel();
@@ -497,12 +512,27 @@ async function runReconstruction() {
 
 $('btn-save-cloud').addEventListener('click', () => {
   if (!viewer.chunks.length) return;
-  const chunks = viewer.chunks.map((chunk) => ({
-    positions: chunk.geometry.getAttribute('position').array,
-    colors: chunk.geometry.userData.rgb,
-  }));
-  downloadBlob(exportPLY(chunks), 'point_cloud.ply');
+  $('export-dialog').showModal();
 });
+
+const EXPORTERS = {
+  las: { write: exportLAS, name: 'point_cloud.las' },
+  pts: { write: exportPTS, name: 'point_cloud.pts' },
+  ply: { write: exportPLY, name: 'point_cloud.ply' },
+};
+
+for (const button of document.querySelectorAll('.export-option')) {
+  button.addEventListener('click', () => {
+    const exporter = EXPORTERS[button.dataset.format];
+    if (!exporter || !viewer.chunks.length) return;
+    const chunks = viewer.chunks.map((chunk) => ({
+      positions: chunk.geometry.getAttribute('position').array,
+      colors: chunk.geometry.userData.rgb,
+    }));
+    downloadBlob(exporter.write(chunks), exporter.name);
+    $('export-dialog').close();
+  });
+}
 
 // -------------------------------------------------------------------- model
 

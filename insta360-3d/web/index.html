@@ -30,7 +30,7 @@
     <button id="btn-open-cloud" class="tool" title="Open an existing point cloud (.ply)">
       <span class="ico">&#9673;</span> Cloud
     </button>
-    <button id="btn-save-cloud" class="tool" title="Export the current point cloud as binary PLY" disabled>
+    <button id="btn-save-cloud" class="tool" title="Export the point cloud for Navisworks, Trimble Connect or CAD" disabled>
       <span class="ico">&#8615;</span> Export
     </button>
   </div>
@@ -254,6 +254,38 @@
   <span class="spacer"></span>
   <span id="status-fps"></span>
 </footer>
+
+<dialog id="export-dialog" class="dialog">
+  <h2>Export the point cloud</h2>
+  <p class="hint">Coordinates are written Z-up in metres, the convention every CAD
+    package expects. Measurements you take in those tools will match the ones here.</p>
+  <div class="export-list">
+    <button class="export-option" data-format="las">
+      <strong>LAS 1.2</strong>
+      <span>Point cloud interchange, with colour. Opens in Trimble Connect, and in
+        Navisworks Freedom once ReCap has turned it into an RCP.</span>
+    </button>
+    <button class="export-option" data-format="pts">
+      <strong>PTS</strong>
+      <span>Plain text X Y Z intensity R G B. Slower and about six times larger, but
+        read by nearly every scanning package — the fallback when LAS is refused.</span>
+    </button>
+    <button class="export-option" data-format="ply">
+      <strong>PLY</strong>
+      <span>Binary, with colour. For CloudCompare, MeshLab and Blender rather than
+        for CAD.</span>
+    </button>
+  </div>
+  <h3>Getting into Navisworks Freedom</h3>
+  <p class="hint">Freedom itself opens only NWD, DWF and ReCap RCS/RCP — it has no
+    importer. Export LAS, open it in Autodesk ReCap and save an <code>.rcp</code>,
+    which Freedom opens directly. Navisworks Manage can append the LAS itself and
+    publish an NWD if you have it.</p>
+  <h3>Getting into Trimble Connect</h3>
+  <p class="hint">Add the LAS through Trimble Connect for Windows; once uploaded it
+    is viewable in the browser client too.</p>
+  <form method="dialog"><button class="btn">Close</button></form>
+</dialog>
 
 <dialog id="help-dialog" class="dialog">
   <h2>Navigation &amp; shortcuts</h2>
