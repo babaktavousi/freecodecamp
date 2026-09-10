@@ -82,7 +82,16 @@ def to_z_up(xyz):
     return np.stack([xyz[:, 0], -xyz[:, 2], xyz[:, 1]], axis=1)
 
 
-def write_las(path, xyz, rgb):
+def write_las(path, xyz, rgb, colour_bits=16):
+    """Write LAS 1.2, point record format 2.
+
+    `colour_bits` exists because the LAS spec stores RGB in 16-bit fields but is
+    silent on the range. Most software writes the full range (255 -> 65535) and
+    that is what this defaults to, but a fair amount of scanning software writes
+    8-bit values into those fields instead, and some readers — Navisworks among
+    the awkward ones — assume that instead of detecting it, showing a full-range
+    file as flat white or as no colour at all. Pass 8 if colour does not appear.
+    """
     xyz = to_z_up(xyz)
     mins, maxs = xyz.min(axis=0), xyz.max(axis=0)
     offset = np.floor(mins)
@@ -118,19 +127,20 @@ def write_las(path, xyz, rgb):
     ]))
     records["x"], records["y"], records["z"] = scaled[:, 0], scaled[:, 1], scaled[:, 2]
     luma = 0.299 * rgb[:, 0] + 0.587 * rgb[:, 1] + 0.114 * rgb[:, 2]
-    records["intensity"] = (luma * 257).astype(np.uint16)
+    gain = 257 if colour_bits == 16 else 1
+    records["intensity"] = (luma * gain).astype(np.uint16)
     records["flags"] = 0b00001001  # return 1 of 1
     records["classification"] = 1  # unclassified
-    records["red"] = rgb[:, 0] * 257
-    records["green"] = rgb[:, 1] * 257
-    records["blue"] = rgb[:, 2] * 257
+    records["red"] = rgb[:, 0] * gain
+    records["green"] = rgb[:, 1] * gain
+    records["blue"] = rgb[:, 2] * gain
 
     with open(path, "wb") as fh:
         fh.write(header)
         fh.write(records.tobytes())
 
 
-def write_pts(path, xyz, rgb):
+def write_pts(path, xyz, rgb, colour_bits=16):
     xyz = to_z_up(xyz)
     luma = (0.299 * rgb[:, 0] + 0.587 * rgb[:, 1] + 0.114 * rgb[:, 2]).astype(int) - 2048
     with open(path, "w") as fh:
@@ -139,14 +149,14 @@ def write_pts(path, xyz, rgb):
             fh.write(f"{x:.4f} {y:.4f} {z:.4f} {i} {r} {g} {b}\n")
 
 
-def write_laz(path, xyz, rgb):
+def write_laz(path, xyz, rgb, colour_bits=16):
     """LAZ is LAS losslessly compressed, roughly 3x smaller and read anywhere LAS is."""
     try:
         import laspy
     except ImportError:
         raise SystemExit("LAZ needs laspy: pip install 'laspy[lazrs]'")
     las_path = os.path.splitext(path)[0] + ".tmp.las"
-    write_las(las_path, xyz, rgb)
+    write_las(las_path, xyz, rgb, colour_bits)
     try:
         laspy.read(las_path).write(path)
     finally:
@@ -164,6 +174,10 @@ def main():
     )
     ap.add_argument("--in", dest="source", required=True, help="input .ply")
     ap.add_argument("--out", required=True, help="output .las, .laz or .pts")
+    ap.add_argument("--colour-bits", type=int, choices=(8, 16), default=16,
+                    help="range used for RGB in LAS/LAZ. 16 (default) writes the "
+                         "full range; 8 writes 0-255, which some readers, "
+                         "Navisworks included, expect instead")
     ap.add_argument("--split-mb", type=float,
                     help="split into numbered parts no larger than this, for "
                          "transfers with a size limit. Every part is a complete "
@@ -174,7 +188,10 @@ def main():
     writers = {".las": write_las, ".laz": write_laz, ".pts": write_pts}
     if suffix not in writers:
         raise SystemExit("--out must end in .las, .laz or .pts")
-    write = writers[suffix]
+    writer = writers[suffix]
+
+    def write(path, pts, cols):
+        return writer(path, pts, cols, args.colour_bits)
 
     xyz, rgb = read_ply(args.source)
     print(f"read {len(xyz):,} points from {args.source}")
