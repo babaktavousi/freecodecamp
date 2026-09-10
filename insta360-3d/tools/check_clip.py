@@ -30,6 +30,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from reconstruct import find_ffmpeg, probe_size  # noqa: E402
 
 PROXY_WIDTH = 320
+# Motion is reported at this frame rate, so clips at different rates compare.
+REFERENCE_FPS = 12.0
 
 
 def decode_proxy(ffmpeg, path, width, height, start, duration):
@@ -93,18 +95,23 @@ def find_static_band(frames, height):
 
 
 def analyse(frames, fps):
-    """Per-frame sharpness and inter-frame motion, in the horizon band."""
+    """Per-frame sharpness, and motion in the horizon band scaled to per-second.
+
+    Frame-to-frame difference alone is a rate, not a speed: the same walk shot
+    at 30 fps moves half as far between frames as at 15 fps and would look half
+    as fast. Scaling by fps makes the number comparable across clips.
+    """
     h = frames[0].shape[0]
     band = slice(int(h * 0.35), int(h * 0.75))
     sharp = np.array([
         np.diff(f[band], axis=1).var() + np.diff(f[band], axis=0).var()
         for f in frames
     ])
-    motion = np.array([
+    per_frame = np.array([
         np.abs(frames[i][band] - frames[i - 1][band]).mean()
         for i in range(1, len(frames))
     ])
-    return sharp, motion
+    return sharp, per_frame * (fps / REFERENCE_FPS)
 
 
 def usable_segments(sharp, motion, fps, min_seconds):
@@ -182,7 +189,7 @@ def main():
     sharp, motion = analyse(frames, fps)
     med_motion = float(np.median(motion))
     print(f"motion: median {med_motion:.1f}, p90 {np.percentile(motion, 90):.1f}  "
-          f"(per-frame greyscale difference)")
+          f"(greyscale difference, normalised to {REFERENCE_FPS:.0f} fps)")
 
     if med_motion < 1.5:
         problems.append(
