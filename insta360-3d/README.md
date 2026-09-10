@@ -119,7 +119,13 @@ The same conversions are available for clouds you already have:
 
 ```bash
 python3 tools/convert_cloud.py --in cloud.ply --out cloud.las
+python3 tools/convert_cloud.py --in cloud.ply --out cloud.laz          # ~3x smaller, lossless
+python3 tools/convert_cloud.py --in cloud.ply --out cloud.las --split-mb 25
 ```
+
+`--split-mb` writes numbered parts under a size limit, for transfers that
+impose one. Each part is a complete file and both ReCap and Trimble load a set
+of them as one project, so a split costs no density.
 
 Both writers are held to the same output — the browser's LAS and the CLI's are
 byte-identical in colour and agree to within the 1 mm coordinate quantisation.

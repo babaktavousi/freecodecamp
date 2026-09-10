@@ -2,11 +2,16 @@
 """Convert a reconstructed PLY into the formats CAD tools actually read.
 
 PLY is a graphics format. Navisworks and Trimble Connect do not import it, so a
-cloud has to leave here as LAS (the LiDAR interchange standard) or PTS (plain
-text) to be useful downstream.
+cloud has to leave here as LAS (the LiDAR interchange standard), LAZ (the same
+thing losslessly compressed, about 3x smaller) or PTS (plain text).
 
     python3 tools/convert_cloud.py --in samples/walkthrough_cloud.ply --out cloud.las
-    python3 tools/convert_cloud.py --in cloud.ply --out cloud.pts
+    python3 tools/convert_cloud.py --in cloud.ply --out cloud.laz
+    python3 tools/convert_cloud.py --in cloud.ply --out cloud.las --split-mb 25
+
+--split-mb writes numbered parts under a size limit, for transfers that impose
+one. Each part is a complete file, and ReCap and Trimble load a set of them
+into a single project, so nothing is lost by splitting.
 
 Axes are converted from the viewer's Y-up convention to Z-up, which is what
 every CAD package assumes; without it the model arrives lying on its side.
@@ -21,6 +26,7 @@ it is then viewable in the browser client as well.
 
 import argparse
 import datetime
+import math
 import os
 import struct
 import sys
@@ -133,26 +139,66 @@ def write_pts(path, xyz, rgb):
             fh.write(f"{x:.4f} {y:.4f} {z:.4f} {i} {r} {g} {b}\n")
 
 
+def write_laz(path, xyz, rgb):
+    """LAZ is LAS losslessly compressed, roughly 3x smaller and read anywhere LAS is."""
+    try:
+        import laspy
+    except ImportError:
+        raise SystemExit("LAZ needs laspy: pip install 'laspy[lazrs]'")
+    las_path = os.path.splitext(path)[0] + ".tmp.las"
+    write_las(las_path, xyz, rgb)
+    try:
+        laspy.read(las_path).write(path)
+    finally:
+        os.remove(las_path)
+
+
+def split_indices(count, parts):
+    edges = np.linspace(0, count, parts + 1).astype(int)
+    return list(zip(edges[:-1], edges[1:]))
+
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--in", dest="source", required=True, help="input .ply")
-    ap.add_argument("--out", required=True, help="output .las or .pts")
+    ap.add_argument("--out", required=True, help="output .las, .laz or .pts")
+    ap.add_argument("--split-mb", type=float,
+                    help="split into numbered parts no larger than this, for "
+                         "transfers with a size limit. Every part is a complete "
+                         "file; ReCap and Trimble load them into one project.")
     args = ap.parse_args()
 
     suffix = os.path.splitext(args.out)[1].lower()
-    if suffix not in (".las", ".pts"):
-        raise SystemExit("--out must end in .las or .pts")
+    writers = {".las": write_las, ".laz": write_laz, ".pts": write_pts}
+    if suffix not in writers:
+        raise SystemExit("--out must end in .las, .laz or .pts")
+    write = writers[suffix]
 
     xyz, rgb = read_ply(args.source)
     print(f"read {len(xyz):,} points from {args.source}")
-    if suffix == ".las":
-        write_las(args.out, xyz, rgb)
-    else:
-        write_pts(args.out, xyz, rgb)
-    size = os.path.getsize(args.out)
-    print(f"wrote {args.out} ({size / 1e6:.1f} MB), Z-up, metres")
+
+    if not args.split_mb:
+        write(args.out, xyz, rgb)
+        print(f"wrote {args.out} ({os.path.getsize(args.out) / 1e6:.1f} MB), Z-up, metres")
+        return
+
+    # Size one part, then split by point count — every format here is fixed or
+    # near-fixed cost per point, so the estimate holds.
+    probe = os.path.splitext(args.out)[0] + ".probe" + suffix
+    sample = min(len(xyz), 200_000)
+    write(probe, xyz[:sample], rgb[:sample])
+    per_point = os.path.getsize(probe) / sample
+    os.remove(probe)
+
+    parts = max(1, math.ceil(len(xyz) * per_point / (args.split_mb * 1e6)))
+    stem, ext = os.path.splitext(args.out)
+    print(f"splitting into {parts} part(s) of at most {args.split_mb:.0f} MB")
+    for n, (lo, hi) in enumerate(split_indices(len(xyz), parts), start=1):
+        part = f"{stem}_{n:02d}of{parts:02d}{ext}"
+        write(part, xyz[lo:hi], rgb[lo:hi])
+        print(f"  {part}  {hi - lo:,} points  {os.path.getsize(part) / 1e6:.1f} MB")
 
 
 if __name__ == "__main__":
