@@ -10,8 +10,11 @@
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = resolve(new URL('..', import.meta.url).pathname);
+// fileURLToPath rather than URL.pathname: on Windows the latter yields
+// "/C:/Users/...", whose leading slash makes every resolved path wrong.
+const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const port = Number(process.env.PORT) || 8080;
 
 const TYPES = {
