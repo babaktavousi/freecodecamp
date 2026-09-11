@@ -141,11 +141,21 @@ def write_las(path, xyz, rgb, colour_bits=16):
 
 
 def write_pts(path, xyz, rgb, colour_bits=16):
+    """Leica PTS: a count line, then `X Y Z intensity R G B` per point.
+
+    This is the format to reach Navisworks with. Navisworks reads no LAS at
+    all — its laser scan readers are ASCII, Faro, Leica, Riegl, Z+F and ReCap
+    — but PTS is among them, so it needs no ReCap conversion step.
+
+    Intensity spans Leica's -2048..2047 rather than the luminance byte, since
+    a reader colouring by intensity would otherwise get a nearly flat image.
+    """
     xyz = to_z_up(xyz)
-    luma = (0.299 * rgb[:, 0] + 0.587 * rgb[:, 1] + 0.114 * rgb[:, 2]).astype(int) - 2048
+    luma = 0.299 * rgb[:, 0] + 0.587 * rgb[:, 1] + 0.114 * rgb[:, 2]
+    intensity = np.round(luma / 255.0 * 4095.0 - 2048.0).astype(int)
     with open(path, "w") as fh:
         fh.write(f"{len(xyz)}\n")
-        for (x, y, z), (r, g, b), i in zip(xyz, rgb, luma):
+        for (x, y, z), (r, g, b), i in zip(xyz, rgb, intensity):
             fh.write(f"{x:.4f} {y:.4f} {z:.4f} {i} {r} {g} {b}\n")
 
 

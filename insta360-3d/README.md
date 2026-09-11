@@ -103,14 +103,15 @@ measured downstream match the ones measured here:
 
 | | |
 |---|---|
-| **LAS 1.2** | Point cloud interchange with colour — the one to use |
-| **PTS** | Plain text `X Y Z intensity R G B`; larger and slower, but almost universally accepted |
+| **PTS** | Leica plain text — **the one Navisworks reads** |
+| **LAS 1.2** | Point cloud interchange with colour, for Trimble Connect, ReCap and CloudCompare |
 | **PLY** | Binary with colour, for CloudCompare, MeshLab and Blender |
 
-**Navisworks Freedom** has no importer: it opens only NWD, DWF and ReCap
-RCS/RCP. Export LAS, open it in Autodesk ReCap and save an `.rcp` — Freedom
-opens that directly, and navigates and measures it. With Navisworks Manage you
-can skip ReCap, appending the LAS and publishing an NWD.
+**Navisworks does not read LAS**, in any version and including Manage. Its
+laser scan readers are ASCII (`.asc`, `.txt`), Faro, Leica (`.pts`, `.ptx`),
+Riegl, Z+F and ReCap (`.rcs`, `.rcp`) — so **export PTS and append that**, with
+no conversion step. Navisworks Freedom reads no scan format at all beyond
+ReCap's, so for Freedom convert a LAS in Autodesk ReCap and save an `.rcp`.
 
 **Trimble Connect** takes the LAS through Trimble Connect for Windows; once
 uploaded it is viewable in the browser client too.
