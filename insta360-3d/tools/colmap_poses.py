@@ -109,6 +109,8 @@ def main():
     ap.add_argument("--decode-width", type=int, default=2048)
     ap.add_argument("--start", type=float)
     ap.add_argument("--duration", type=float)
+    ap.add_argument("--keyframe-window", type=int, default=6,
+                    help="match a keyframe against this many that follow it")
     ap.add_argument("--keep-images", action="store_true")
     args = ap.parse_args()
 
@@ -158,14 +160,39 @@ def main():
         "--SiftExtraction.use_gpu", "0",
     ], "feature extraction")
 
-    # Sequential matching suits a walk: consecutive keyframes overlap, and the
-    # loop detection still catches a path that doubles back.
+    # Match only pairs that can physically overlap.
+    #
+    # Letting COLMAP choose pairs itself is what sank the first attempts: a
+    # suburban street repeats (similar houses, fences, road texture), so SIFT
+    # plus RANSAC happily "verifies" hundreds of inliers between views facing
+    # opposite ways. Half the match graph was those, and the mapper, handed
+    # contradictory geometry, triangulated almost nothing and gave up after
+    # three images.
+    #
+    # Two views can only share a field of view if their yaw differs by less
+    # than one FOV, and they only carry parallax if they are from different
+    # keyframes close enough together to still see the same surfaces.
+    max_view_step = max(1, int(args.fov // (360.0 / args.views)) - 1)
+    pair_list = os.path.join(work, "pairs.txt")
+    with open(pair_list, "w") as fh:
+        for i in range(len(frames)):
+            for j in range(i, min(i + args.keyframe_window + 1, len(frames))):
+                for k in range(args.views):
+                    for step in range(-max_view_step, max_view_step + 1):
+                        k2 = (k + step) % args.views
+                        if i == j and k2 <= k:
+                            continue  # same keyframe: no baseline, and avoid duplicates
+                        fh.write(f"v{k}_kf{i:04d}.jpg v{k2}_kf{j:04d}.jpg\n")
+    with open(pair_list) as fh:
+        n_pairs = sum(1 for _ in fh)
+    print(f"  matching {n_pairs:,} plausible pairs "
+          f"(view step <= {max_view_step}, keyframe gap <= {args.keyframe_window})")
     run([
-        "colmap", "sequential_matcher",
+        "colmap", "matches_importer",
         "--database_path", database,
+        "--match_list_path", pair_list,
+        "--match_type", "pairs",
         "--SiftMatching.use_gpu", "0",
-        "--SequentialMatching.overlap", "10",
-        "--SequentialMatching.quadratic_overlap", "0",
     ], "matching")
 
     run([
