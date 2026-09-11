@@ -53,6 +53,24 @@ from spherical import (  # noqa: E402
 )
 
 
+def sky_mask(frame, margin, luma_floor):
+    """Daylight sky: blue-dominant and bright.
+
+    Sky is at infinity, so it never shifts between viewpoints and cannot be
+    triangulated at all. The matcher still returns *something*, and what it
+    returns drapes over whatever thin high-contrast object is silhouetted
+    against it — overhead wires and bare branches end up wrapped in blue haze.
+    Rejecting it by colour is cruder than reasoning about parallax but it costs
+    nothing and removes the artefact at its source.
+    """
+    rgb = frame * 255.0 if frame.dtype != np.uint8 and frame.max() <= 1.0 else frame
+    r = rgb[..., 0].astype(np.float32)
+    g = rgb[..., 1].astype(np.float32)
+    b = rgb[..., 2].astype(np.float32)
+    luma = 0.299 * r + 0.587 * g + 0.114 * b
+    return (b > r + margin) & (luma > luma_floor)
+
+
 def find_ffmpeg():
     exe = shutil.which("ffmpeg")
     if exe:
@@ -463,6 +481,15 @@ def main():
     ap.add_argument("--min-confidence", type=float, default=0.06)
     ap.add_argument("--min-texture", type=float, default=0.012)
     ap.add_argument("--max-latitude", type=float, default=72.0, help="degrees; masks zenith/nadir")
+    ap.add_argument("--keep-sky", action="store_true",
+                    help="keep sky-coloured points instead of rejecting them")
+    ap.add_argument("--sky-margin", type=int, default=22,
+                    help="how much bluer than red a pixel must be to count as sky")
+    ap.add_argument("--sky-luma", type=int, default=95,
+                    help="and how bright, 0-255")
+    ap.add_argument("--operator-radius", type=float, default=0.9,
+                    help="metres; drop points this close to the camera path, where "
+                         "only the operator and the stick can be (0 disables)")
     ap.add_argument("--camera-height", type=float, default=1.60, help="metres above the floor")
     ap.add_argument("--no-metric-scale", action="store_true")
     ap.add_argument("--max-points", type=int, default=3_000_000)
@@ -522,6 +549,8 @@ def main():
             & (best_k < args.layers - 1)
             & lat_mask
         )
+        if not args.keep_sky:
+            keep &= ~sky_mask(sweep_frames[i], args.sky_margin, args.sky_luma)
         idx = np.nonzero(keep.ravel())[0]
         if len(idx) == 0:
             continue
@@ -578,6 +607,22 @@ def main():
                 centres = centres_w
                 transform[:3, :3] = rot * scale
                 transform[1, 3] = offset
+
+    # After scaling, so the radius can be stated in metres. The operator and the
+    # stick ride with the camera and so never shift between views; they cannot be
+    # triangulated and land as a smear underneath it. Distance is the test rather
+    # than direction, because the floor is directly under the camera too and a
+    # nadir cone wide enough to catch someone's shoulders takes the floor with it.
+    if args.operator_radius > 0 and scale != 1.0:
+        keep_far = np.ones(len(points), dtype=bool)
+        for lo in range(0, len(points), 200_000):
+            hi = min(lo + 200_000, len(points))
+            d2 = ((points[lo:hi, None, :] - centres[None, :, :]) ** 2).sum(axis=2)
+            keep_far[lo:hi] = d2.min(axis=1) > args.operator_radius ** 2
+        dropped = len(points) - int(keep_far.sum())
+        points, colors = points[keep_far], colors[keep_far]
+        print(f"removed {dropped:,} points on the operator "
+              f"(within {args.operator_radius} m of the camera path)")
 
     if len(points) > args.max_points:
         sel = np.random.default_rng(0).choice(len(points), args.max_points, replace=False)
