@@ -133,7 +133,12 @@ def main():
         for k, yaw in enumerate(yaws):
             view = perspective_view(frame, yaw, 0.0, args.fov, args.view_size)
             arr = np.clip(view * 255.0, 0, 255).astype(np.uint8)
-            Image.fromarray(arr).save(os.path.join(images, f"kf{i:04d}_v{k}.jpg"), quality=92)
+            # View-major naming, because COLMAP's sequential matcher pairs
+            # images in filename order. Keyframe-major ordering makes it compare
+            # different directions at the same instant, which barely overlap;
+            # view-major makes it compare the same direction across consecutive
+            # keyframes, which is exactly where the overlap is.
+            Image.fromarray(arr).save(os.path.join(images, f"v{k}_kf{i:04d}.jpg"), quality=92)
 
     database = os.path.join(work, "database.db")
     sparse = os.path.join(work, "sparse")
@@ -159,7 +164,8 @@ def main():
         "colmap", "sequential_matcher",
         "--database_path", database,
         "--SiftMatching.use_gpu", "0",
-        "--SequentialMatching.overlap", str(max(6, args.views * 2)),
+        "--SequentialMatching.overlap", "10",
+        "--SequentialMatching.quadratic_overlap", "0",
     ], "matching")
 
     run([
@@ -185,7 +191,7 @@ def main():
     for i in range(len(frames)):
         cs, rs = [], []
         for k, yaw in enumerate(yaws):
-            hit = poses.get(f"kf{i:04d}_v{k}.jpg")
+            hit = poses.get(f"v{k}_kf{i:04d}.jpg")
             if hit is None:
                 continue
             r_wc, centre = hit
