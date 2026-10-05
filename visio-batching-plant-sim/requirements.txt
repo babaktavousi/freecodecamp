@@ -1,3 +1,0 @@
-# Core engine and GUI use only the Python standard library (tkinter ships with Python on Windows).
-# Live access to the drawing open in Visio needs pywin32 (Windows only):
-pywin32>=306; sys_platform == "win32"
