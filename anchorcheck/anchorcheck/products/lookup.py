@@ -143,3 +143,45 @@ def lookup_on_web(name: str, settings: Settings, llm=None, kind: str = "anchor",
             out.notes.append("Documents were found but no bond-resistance table could be read automatically - "
                              "attach the TDS/ETA PDF or enter values manually.")
     return out
+
+
+def lookup_from_url(name: str, url: str, settings: Settings, llm=None, kind: str = "anchor",
+                    client: Optional[WebClient] = None) -> LookupResult:
+    """Fetch and parse ONE document at a user-supplied link (independent of any search engine)."""
+    out = LookupResult(spec=None, source="web (user link)")
+    if settings.web.offline:
+        out.notes.append("Offline mode: cannot fetch the link.")
+        return out
+    client = client or WebClient(settings.web)
+    try:
+        doc = client.fetch(url)
+    except WebError as e:
+        out.attempts.append(LookupAttempt(url, "", False, str(e)))
+        out.notes.append(str(e))
+        return out
+    docs = [doc]
+    if doc.kind == "html":
+        for link in doc.pdf_links[:6]:
+            if any(k in link.lower() for k in ("tds", "data", "eta", "technical", "spec")):
+                try:
+                    docs.append(client.fetch(link))
+                except WebError:
+                    pass
+    best: Optional[AdhesiveSpec] = None
+    for d in docs:
+        res = parse_spec_text(d.pages, name=name, doc_name=d.title or d.url, source="web (user link)", url=d.url)
+        for p in list(res.spec.provenance.values()) + [b.prov for b in res.spec.bond]:
+            p.note = (p.note + " " if p.note else "") + f"retrieved {d.fetched_at}"
+        if llm is not None and not res.spec.bond and d.kind == "pdf":
+            out.notes += llm_fill_missing(res, d.pages, llm, d.url)
+        out.attempts.append(LookupAttempt(d.url, d.title, bool(res.spec.bond or res.spec.eta), f"bond entries {len(res.spec.bond)}",
+                                          _score(res), "user-supplied"))
+        if best is None:
+            best = res.spec
+            best.name = name
+        elif _score(res) > 0:
+            merge_specs(best, res.spec)
+    out.spec = best
+    if best is not None:
+        out.missing = ParseResult(best).missing_for_design(kind)
+    return out

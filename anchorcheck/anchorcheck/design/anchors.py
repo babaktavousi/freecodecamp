@@ -159,7 +159,13 @@ class AnchorEngine:
 
     def _select_bond_entry(self) -> Optional[BondEntry]:
         spec, c = self.spec, self.case
-        cands = [e for e in spec.bond if abs(e.d - c.fastener_d) < 0.51]
+        want_kind = "rebar" if c.kind == "rebar" else "rod"
+        same_d = [e for e in spec.bond if abs(e.d - c.fastener_d) < 0.51]
+        cands = [e for e in same_d if e.fastener == want_kind]
+        if not cands and same_d:
+            cands = same_d
+            self.warnings.append(f"No {want_kind}-specific bond table in {spec.name}: the "
+                                 f"{'/'.join(sorted({e.fastener for e in same_d}))} values were used - confirm they apply.")
         if not cands:
             self.warnings.append(f"No bond-resistance data for diameter {c.fastener_d:g} mm in the "
                                  f"{spec.name} specification.")
@@ -256,7 +262,7 @@ class AnchorEngine:
         k_g = b.k_g_cr if self.cracked else b.k_g_ucr
         if n > 1:
             sqn = math.sqrt(n)
-            psi0 = sqn - (sqn - 1.0) * (self.d * self.tau_raw / (k_g * math.sqrt(self.h_ef * self.fc))) ** 1.5
+            psi0 = sqn - (sqn - 1.0) * (self.d * self.tau / (k_g * math.sqrt(self.h_ef * self.fc))) ** 1.5
             psi0 = max(psi0, 1.0)
             pts = geo.anchor_coords(c.layout)
             sx = sorted({round(pts[i][0], 6) for i in idx})

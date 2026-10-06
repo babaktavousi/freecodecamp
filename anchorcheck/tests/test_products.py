@@ -250,3 +250,17 @@ def test_engine_uses_parsed_eta_values_end_to_end(parsed):
     # cracked, hammer, dry/wet, lowest temp range (70/43): tau_cr = 7.5 N/mm2 for M16? -> M16 II = 7.5 per ETA
     assert any(s.symbol == "tau_Rk" and abs(float(s.value) - 7.5 * 1.0) < 0.6 for s in pull.steps)
     assert res.basis_table[0].value == pytest.approx(1 / 1.5, abs=1e-3)       # gamma_inst = 1.0 for hammer drilling
+
+
+def test_lookup_from_user_link_with_fake_client():
+    s = Settings()
+    res = lookup.lookup_from_url("Hilti HIT-RE 500 V3", "https://www.hilti.com.au/eta.pdf", s, client=FakeWeb())
+    assert res.spec is not None and entry(res.spec, "rod", 16).tau_ucr == 17
+    assert res.attempts[0].trust == "user-supplied" and "retrieved" in res.spec.bond[0].prov.note
+
+
+def test_lookup_from_link_respects_offline_mode():
+    s = Settings()
+    s.web.offline = True
+    res = lookup.lookup_from_url("X", "https://example.com/a.pdf", s, client=FakeWeb())
+    assert res.spec is None and any("Offline" in n for n in res.notes)

@@ -278,3 +278,27 @@ def test_default_gamma_inst_is_conservative_and_flagged():
     res = check_case(_anchor_case(), s)
     assert any("gamma_inst" in w for w in res.warnings)
     assert res.basis_table[0].value == pytest.approx(1 / (1.5 * 1.4), abs=1e-3)
+
+
+def test_rod_and_rebar_bond_tables_are_not_mixed():
+    """Regression: a spec holding BOTH rod and rebar tables for the same diameter must use the matching kind."""
+    spec = AdhesiveSpec(name="Both tables", gamma_inst=1.0, bond=[
+        BondEntry(d=16, fastener="rod", tau_cr=9.5, tau_ucr=17),
+        BondEntry(d=16, fastener="rebar", tau_cr=3.0, tau_ucr=5.0)])        # deliberately very different
+    rod = check_case(_anchor_case(), spec)
+    pull_rod = next(c for c in rod.combos[0].checks if c.key == "N_pullout_group")
+    assert next(s.value for s in pull_rod.steps if s.symbol == "tau_Rk") == pytest.approx(9.5, abs=0.01)
+    bar = check_case(_anchor_case(kind="rebar", grade="500N", h_ef=125), spec)
+    assert bar.alt_method is not None
+    pull_bar = next(c for c in bar.alt_method.combos[0].checks if c.key == "N_pullout_group")
+    assert next(s.value for s in pull_bar.steps if s.symbol == "tau_Rk") == pytest.approx(3.0, abs=0.01)
+
+
+def test_group_factor_uses_tau_including_psi_c():
+    """psi0_g,Np must use the bond resistance that enters N0_Rk,p (conservative: includes psi_c)."""
+    spec = _spec()
+    spec.psi_c = {20.0: 1.0, 40.0: 1.3}
+    hi = check_case(_anchor_case(concrete=Concrete(fc=40, thickness=300, cracked=True, stated_on_drawing=True)), spec)
+    lo = check_case(_anchor_case(concrete=Concrete(fc=20, thickness=300, cracked=True, stated_on_drawing=True)), spec)
+    g = lambda r: next(s.value for c in r.combos[0].checks if c.key == "N_pullout_group" for s in c.steps if s.symbol.startswith("psi_g"))
+    assert g(hi) >= 1.0 and g(lo) >= 1.0

@@ -180,6 +180,7 @@ class DesignCase:
     title: str = "Chemical anchor group"
     kind: str = "anchor"                  # "anchor" (threaded rod/stud) | "rebar" (post-installed bar)
     page: Optional[int] = None
+    source: str = ""                      # drawing file the case was read from
     fastener_d: float = 16.0              # nominal diameter, mm
     grade: str = "8.8"                    # rod grade, or "500N" for rebar
     h_ef: float = 125.0                   # effective embedment, mm
